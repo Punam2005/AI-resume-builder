@@ -7,12 +7,18 @@ const Home = () => {
 
     const { loading, generateReport,reports } = useInterview()
     const [ jobDescription, setJobDescription ] = useState("")
+    const [ jobDescriptionError, setJobDescriptionError ] = useState("")
     const [ selfDescription, setSelfDescription ] = useState("")
     const resumeInputRef = useRef()
 
     const navigate = useNavigate()
 
     const handleGenerateReport = async () => {
+        if (!jobDescription.trim()) {
+            setJobDescriptionError("JD required")
+            return
+        }
+
         const resumeFile = resumeInputRef.current.files[ 0 ]
         const data = await generateReport({ jobDescription, selfDescription, resumeFile })
         navigate(`/interview/${data._id}`)
@@ -48,8 +54,15 @@ const Home = () => {
                             <h2>Target Job Description</h2>
                             <span className='badge badge--required'>Required</span>
                         </div>
+                        {jobDescriptionError && (
+                            <p className='validation-error' role='alert'>{jobDescriptionError}</p>
+                        )}
                         <textarea
-                            onChange={(e) => { setJobDescription(e.target.value) }}
+                            onChange={(e) => {
+                                setJobDescription(e.target.value)
+                                if (e.target.value.trim()) setJobDescriptionError("")
+                            }}
+                            aria-invalid={Boolean(jobDescriptionError)}
                             className='panel__textarea'
                             placeholder={`Paste the full job description here...\ne.g. 'Senior Frontend Engineer at Google requires proficiency in React, TypeScript, and large-scale system design...'`}
                             maxLength={5000}

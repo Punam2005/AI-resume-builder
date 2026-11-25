@@ -1,5 +1,5 @@
 const pdfParse = require("pdf-parse")
-const { generateInterviewReport, generateResumePdf } = require("../services/ai.service")
+const { generateInterviewReport, evaluatePracticeAnswer, generateResumePdf } = require("../services/ai.service")
 const interviewReportModel = require("../models/interviewReport.model")
 
 
@@ -68,6 +68,54 @@ async function getAllInterviewReportsController(req, res) {
     })
 }
 
+async function evaluatePracticeAnswerController(req, res) {
+    const { interviewId } = req.params
+    const { questionType, questionIndex, userAnswer } = req.body
+
+    if (!["technical", "behavioral"].includes(questionType)) {
+        return res.status(400).json({ message: "Choose a valid question type." })
+    }
+
+    if (!Number.isInteger(questionIndex) || questionIndex < 0) {
+        return res.status(400).json({ message: "Choose a valid question." })
+    }
+
+    if (typeof userAnswer !== "string" || !userAnswer.trim()) {
+        return res.status(400).json({ message: "Write an answer before requesting feedback." })
+    }
+
+    if (userAnswer.length > 5000) {
+        return res.status(400).json({ message: "Your answer must be 5000 characters or fewer." })
+    }
+
+    const interviewReport = await interviewReportModel.findOne({
+        _id: interviewId,
+        user: req.user.id
+    })
+
+    if (!interviewReport) {
+        return res.status(404).json({ message: "Interview report not found." })
+    }
+
+    const questions = questionType === "technical"
+        ? interviewReport.technicalQuestions
+        : interviewReport.behavioralQuestions
+    const question = questions[ questionIndex ]
+
+    if (!question) {
+        return res.status(404).json({ message: "Interview question not found." })
+    }
+
+    const feedback = await evaluatePracticeAnswer({
+        question: question.question,
+        intention: question.intention,
+        expectedAnswer: question.answer,
+        userAnswer: userAnswer.trim()
+    })
+
+    res.status(200).json({ feedback })
+}
+
 
 /**
  * @description Controller to generate resume PDF based on user self description, resume and job description.
@@ -95,4 +143,10 @@ async function generateResumePdfController(req, res) {
     res.send(pdfBuffer)
 }
 
-module.exports = { generateInterViewReportController, getInterviewReportByIdController, getAllInterviewReportsController, generateResumePdfController }
+module.exports = {
+    generateInterViewReportController,
+    getInterviewReportByIdController,
+    getAllInterviewReportsController,
+    evaluatePracticeAnswerController,
+    generateResumePdfController
+}

@@ -9,6 +9,7 @@ const NAV_ITEMS = [
     { id: 'technical', label: 'Technical Questions', icon: (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>) },
     { id: 'behavioral', label: 'Behavioral Questions', icon: (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>) },
     { id: 'roadmap', label: 'Road Map', icon: (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11" /></svg>) },
+    { id: 'practice', label: 'Practice Mode', icon: (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3" /><path d="M18.4 5.6l-2.1 2.1" /><path d="M21 12h-3" /><path d="M18.4 18.4l-2.1-2.1" /><path d="M12 21v-3" /><path d="M5.6 18.4l2.1-2.1" /><path d="M3 12h3" /><path d="M5.6 5.6l2.1 2.1" /><circle cx="12" cy="12" r="4" /></svg>) },
 ]
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -59,7 +60,12 @@ const RoadMapDay = ({ day }) => (
 // ── Main Component ────────────────────────────────────────────────────────────
 const Interview = () => {
     const [ activeNav, setActiveNav ] = useState('technical')
-    const { report, getReportById, loading, getResumePdf } = useInterview()
+    const [ practiceType, setPracticeType ] = useState('technical')
+    const [ practiceQuestionIndex, setPracticeQuestionIndex ] = useState(0)
+    const [ practiceEntries, setPracticeEntries ] = useState({})
+    const [ practiceLoading, setPracticeLoading ] = useState(false)
+    const [ practiceError, setPracticeError ] = useState('')
+    const { report, getReportById, loading, getResumePdf, getPracticeFeedback } = useInterview()
     const { interviewId } = useParams()
 
     useEffect(() => {
@@ -81,6 +87,46 @@ const Interview = () => {
     const scoreColor =
         report.matchScore >= 80 ? 'score--high' :
             report.matchScore >= 60 ? 'score--mid' : 'score--low'
+
+    const practiceQuestions = practiceType === 'technical'
+        ? report.technicalQuestions
+        : report.behavioralQuestions
+    const practiceKey = `${practiceType}-${practiceQuestionIndex}`
+    const practiceEntry = practiceEntries[ practiceKey ] || { answer: '', feedback: null }
+
+    const updatePracticeEntry = (updates) => {
+        setPracticeEntries(current => ({
+            ...current,
+            [ practiceKey ]: {
+                ...(current[ practiceKey ] || { answer: '', feedback: null }),
+                ...updates
+            }
+        }))
+    }
+
+    const handlePracticeSubmit = async (event) => {
+        event.preventDefault()
+        if (!practiceEntry.answer.trim()) {
+            setPracticeError('Write your answer before requesting feedback.')
+            return
+        }
+
+        setPracticeError('')
+        setPracticeLoading(true)
+        try {
+            const feedback = await getPracticeFeedback({
+                interviewId,
+                questionType: practiceType,
+                questionIndex: practiceQuestionIndex,
+                userAnswer: practiceEntry.answer.trim()
+            })
+            updatePracticeEntry({ feedback })
+        } catch (error) {
+            setPracticeError(error.response?.data?.message || 'Could not evaluate your answer. Please try again.')
+        } finally {
+            setPracticeLoading(false)
+        }
+    }
 
 
     return (
@@ -153,6 +199,112 @@ const Interview = () => {
                                     <RoadMapDay key={day.day} day={day} />
                                 ))}
                             </div>
+                        </section>
+                    )}
+
+                    {activeNav === 'practice' && (
+                        <section className='practice-mode'>
+                            <div className='content-header'>
+                                <h2>Practice Mode</h2>
+                                <span className='content-header__count'>Answer and get AI feedback</span>
+                            </div>
+
+                            <div className='practice-mode__types' aria-label='Question type'>
+                                {['technical', 'behavioral'].map(type => (
+                                    <button
+                                        key={type}
+                                        type='button'
+                                        className={`practice-mode__type ${practiceType === type ? 'practice-mode__type--active' : ''}`}
+                                        onClick={() => {
+                                            setPracticeType(type)
+                                            setPracticeQuestionIndex(0)
+                                            setPracticeError('')
+                                        }}
+                                        disabled={practiceLoading}
+                                    >
+                                        {type === 'technical' ? 'Technical' : 'Behavioral'}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {practiceQuestions.length === 0 ? (
+                                <p className='practice-mode__empty'>There are no {practiceType} questions to practice.</p>
+                            ) : (
+                                <>
+                                    <div className='practice-mode__question'>
+                                        <span>Question {practiceQuestionIndex + 1} of {practiceQuestions.length}</span>
+                                        <p>{practiceQuestions[ practiceQuestionIndex ].question}</p>
+                                    </div>
+
+                                    <form className='practice-mode__form' onSubmit={handlePracticeSubmit}>
+                                        <label htmlFor='practice-answer'>Your answer</label>
+                                        <textarea
+                                            id='practice-answer'
+                                            value={practiceEntry.answer}
+                                            onChange={event => {
+                                                updatePracticeEntry({ answer: event.target.value, feedback: null })
+                                                setPracticeError('')
+                                            }}
+                                            maxLength={5000}
+                                            placeholder='Write how you would answer this in an interview...'
+                                            required
+                                        />
+                                        <span className='practice-mode__char-count'>{practiceEntry.answer.length} / 5000</span>
+                                        {practiceError && <p className='practice-mode__error' role='alert'>{practiceError}</p>}
+                                        <button className='practice-mode__submit' type='submit' disabled={practiceLoading}>
+                                            {practiceLoading ? 'Reviewing your answer...' : 'Get AI feedback'}
+                                        </button>
+                                    </form>
+
+                                    {practiceEntry.feedback && (
+                                        <div className='practice-feedback' aria-live='polite'>
+                                            <div className='practice-feedback__score'>
+                                                <span>Answer score</span>
+                                                <strong>{practiceEntry.feedback.score}/100</strong>
+                                            </div>
+                                            {practiceEntry.feedback.strengths.length > 0 && (
+                                                <div>
+                                                    <h3>What you did well</h3>
+                                                    <ul>{practiceEntry.feedback.strengths.map((item, index) => <li key={index}>{item}</li>)}</ul>
+                                                </div>
+                                            )}
+                                            {practiceEntry.feedback.improvements.length > 0 && (
+                                                <div>
+                                                    <h3>How to improve</h3>
+                                                    <ul>{practiceEntry.feedback.improvements.map((item, index) => <li key={index}>{item}</li>)}</ul>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <h3>Example of a stronger answer</h3>
+                                                <p>{practiceEntry.feedback.suggestedAnswer}</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className='practice-mode__navigation'>
+                                        <button
+                                            type='button'
+                                            onClick={() => {
+                                                setPracticeQuestionIndex(index => index - 1)
+                                                setPracticeError('')
+                                            }}
+                                            disabled={practiceQuestionIndex === 0 || practiceLoading}
+                                        >
+                                            Previous question
+                                        </button>
+                                        <button
+                                            type='button'
+                                            onClick={() => {
+                                                setPracticeQuestionIndex(index => index + 1)
+                                                setPracticeError('')
+                                            }}
+                                            disabled={practiceQuestionIndex === practiceQuestions.length - 1 || practiceLoading}
+                                        >
+                                            Next question
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </section>
                     )}
                 </main>

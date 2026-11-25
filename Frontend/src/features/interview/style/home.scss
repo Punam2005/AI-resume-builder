@@ -195,6 +195,16 @@ $font-stack:     system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Robot
     margin-bottom: 0.25rem;
 }
 
+.validation-error {
+    margin: 0;
+    color: $badge-required;
+    font-size: 0.8rem;
+}
+
+.panel__textarea[aria-invalid='true'] {
+    border-color: $badge-required;
+}
+
 // ── Dropzone ──────────────────────────────────────────────────────────────────
 .upload-section {
     display: flex;

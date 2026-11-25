@@ -46,6 +46,19 @@ export const getAllInterviewReports = async () => {
     return response.data
 }
 
+/**
+ * @description Service to evaluate a user's answer to an interview question.
+ */
+export const evaluatePracticeAnswer = async ({ interviewId, questionType, questionIndex, userAnswer }) => {
+    const response = await api.post(`/api/interview/report/${interviewId}/practice`, {
+        questionType,
+        questionIndex,
+        userAnswer
+    })
+
+    return response.data
+}
+
 
 /**
  * @description Service to generate resume pdf based on user self description, resume content and job description.

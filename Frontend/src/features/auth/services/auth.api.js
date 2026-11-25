@@ -1,10 +1,21 @@
 import axios from "axios"
 
-
 const api = axios.create({
     baseURL: "http://localhost:3000",
     withCredentials: true
 })
+
+const normalizeAuthError = (err) => {
+    const payload = err?.response?.data
+
+    if (payload && typeof payload === "object") {
+        return payload
+    }
+
+    return {
+        message: err?.message || "Request failed"
+    }
+}
 
 export async function register({ username, email, password }) {
 
@@ -16,9 +27,8 @@ export async function register({ username, email, password }) {
         return response.data
 
     } catch (err) {
-
-        console.log(err)
-
+        console.error(err)
+        throw normalizeAuthError(err)
     }
 
 }
@@ -34,7 +44,8 @@ export async function login({ email, password }) {
         return response.data
 
     } catch (err) {
-        console.log(err)
+        console.error(err)
+        throw normalizeAuthError(err)
     }
 
 }
